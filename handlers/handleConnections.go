@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -16,9 +17,10 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	conn   *websocket.Conn
-	Token  string `json:"token"`
-	chatID string `json:"id"`
+	conn   		*websocket.Conn
+	Token  		string `json:"token"`
+	chatID 		uuid.UUID `json:"id"`
+	UsersInChat []uuid.UUID
 }
 
 type Message struct {
@@ -52,11 +54,18 @@ func (h *BaseHandler) HandleConnections(w http.ResponseWriter, r *http.Request) 
 		log.Fatal(err)
 		return
 	}
+	chatUsers, er := h.db.GetAllUsersInChat(receivedMessage.chatID)
+	if er != nil {
+		log.Println("Error", er)
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
 
 	client := &Client{
 		conn:   conn,
 		Token:  token,
 		chatID: receivedMessage.chatID,
+		UsersInChat: chatUsers,
 	}
 
 	defer conn.Close()
