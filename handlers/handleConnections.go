@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
@@ -18,7 +19,7 @@ var upgrader = websocket.Upgrader{
 
 type Client struct {
 	conn   		*websocket.Conn
-	Token  		string `json:"token"`
+	UserId  	uuid.UUID
 	chatID 		uuid.UUID `json:"id"`
 	UsersInChat []uuid.UUID
 }
@@ -37,12 +38,13 @@ func (c *Client) sendMessage(messageType int, key, value string) error {
 }
 
 func (h *BaseHandler) HandleConnections(w http.ResponseWriter, r *http.Request) {
-	token := r.Header.Get("Authorization")
-	fmt.Println("JWT Token:", token)
-
+	authToken := r.Header.Get("Authorization")
+	fmt.Println("JWT Token:", authToken)
+	token, err := parseToken(authToken)
+	userID, err := uuid.Parse(token.Claims.(jwt.MapClaims)["id"].(string))
 	var receivedMessage Client
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&receivedMessage)
+	err = decoder.Decode(&receivedMessage)
 	if err != nil {
 		log.Println("Error decoding request body:", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -63,7 +65,7 @@ func (h *BaseHandler) HandleConnections(w http.ResponseWriter, r *http.Request) 
 
 	client := &Client{
 		conn:   conn,
-		Token:  token,
+		UserId:  userID,
 		chatID: receivedMessage.chatID,
 		UsersInChat: chatUsers,
 	}
