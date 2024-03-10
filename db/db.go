@@ -37,7 +37,7 @@ func DbStart(baseUrl string) *pgxpool.Pool {
 }
 
 
-func (db DB) chatExists(userID uuid.UUID) (bool, error) {
+func (db DB) chatExists(chatID uuid.UUID) (bool, error) {
 	conn, err := db.pool.Acquire(context.Background())
 	if err != nil {
 		return false, fmt.Errorf("unable to acquire a database connection: %v", err)
@@ -46,7 +46,7 @@ func (db DB) chatExists(userID uuid.UUID) (bool, error) {
 
 	var exists bool
 	err = conn.QueryRow(context.Background(),
-		"SELECT EXISTS (SELECT 1 FROM users WHERE id = $1)", userID).
+		"SELECT EXISTS (SELECT 1 FROM chat WHERE chatid = $1)", chatID).
 		Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("error checking user existence: %v", err)

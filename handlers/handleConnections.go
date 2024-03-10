@@ -18,19 +18,20 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	conn   		*websocket.Conn
-	UserId  	uuid.UUID
-	chatID 		uuid.UUID `json:"id"`
+	conn        *websocket.Conn
+	UserId      uuid.UUID
+	chatID      uuid.UUID
 	UsersInChat []uuid.UUID
+	messageChan chan *Message
 }
 
 type Message struct {
-	Value string `json:"mess"`
+	MessageType int
+	Value       string `json:"mess"`
 }
 
-func (c *Client) sendMessage(messageType int, key, value string) error {
-	message := Message{Value: value}
-	messageData, err := json.Marshal(message)
+func (c *Client) sendMessage(messageType int, value string) error {
+	messageData, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
@@ -41,57 +42,71 @@ func (h *BaseHandler) HandleConnections(w http.ResponseWriter, r *http.Request) 
 	authToken := r.Header.Get("Authorization")
 	fmt.Println("JWT Token:", authToken)
 	token, err := parseToken(authToken)
-	userID, err := uuid.Parse(token.Claims.(jwt.MapClaims)["id"].(string))
-	var receivedMessage Client
-	decoder := json.NewDecoder(r.Body)
-	err = decoder.Decode(&receivedMessage)
 	if err != nil {
-		log.Println("Error decoding request body:", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		log.Println(err)
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
-
+	userID, err := uuid.Parse(token.Claims.(jwt.MapClaims)["id"].(string))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+	params := r.URL.Query()
+	chatID, err := uuid.Parse(params.Get("id"))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Invalid chat ID", http.StatusBadRequest)
+		return
+	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		http.Error(w, "Failed to upgrade connection", http.StatusInternalServerError)
 		return
 	}
-	chatUsers, er := h.db.GetAllUsersInChat(receivedMessage.chatID)
-	if er != nil {
-		log.Println("Error", er)
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	chatUsers, err := h.db.GetAllUsersInChat(chatID)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Failed to get chat users", http.StatusInternalServerError)
 		return
 	}
 
 	client := &Client{
-		conn:   conn,
-		UserId:  userID,
-		chatID: receivedMessage.chatID,
+		conn:        conn,
+		UserId:      userID,
+		chatID:      chatID,
 		UsersInChat: chatUsers,
+		messageChan: make(chan *Message),
 	}
-
-	defer conn.Close()
-
-	for {
-		messageType, p, err := conn.ReadMessage()
-		if err != nil {
-			log.Println(err)
-			return
+	h.clients[userID] = client
+	go func() {
+		for {
+			messageType, p, err := client.conn.ReadMessage()
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			var receivedMessage Message
+			receivedMessage.MessageType = messageType
+			err = json.Unmarshal(p, &receivedMessage)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			h.channel <- &receivedMessage
+			fmt.Printf("Received message - Mess: %s", receivedMessage.Value)
 		}
-
-		var receivedMessage Message
-		err = json.Unmarshal(p, &receivedMessage)
-		if err != nil {
-			log.Println(err)
-			return
+	}()
+	go func() {
+		for {
+			response := <- client.messageChan
+				err = client.sendMessage(response.MessageType, response.Value)
+				if err != nil {
+					log.Println(err)
+					return
+				}
 		}
-
-		fmt.Printf("Received message - Mess: %s", receivedMessage.Value)
-
-		err = client.sendMessage(messageType, "responseKey", "responseValue")
-		if err != nil {
-			log.Println(err)
-			return
-		}
-	}
+	}()
 }
