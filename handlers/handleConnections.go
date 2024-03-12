@@ -27,6 +27,7 @@ type Client struct {
 
 type Message struct {
 	MessageType int
+	ChatId 		uuid.UUID
 	Value       string `json:"mess"`
 }
 
@@ -90,6 +91,7 @@ func (h *BaseHandler) HandleConnections(w http.ResponseWriter, r *http.Request) 
 			}
 			var receivedMessage Message
 			receivedMessage.MessageType = messageType
+			receivedMessage.ChatId = client.chatID
 			err = json.Unmarshal(p, &receivedMessage)
 			if err != nil {
 				log.Println(err)
@@ -108,5 +110,9 @@ func (h *BaseHandler) HandleConnections(w http.ResponseWriter, r *http.Request) 
 					return
 				}
 		}
+		
 	}()
+	defer func() {
+        h.removeClient(userID)
+    }()
 }
