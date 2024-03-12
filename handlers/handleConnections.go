@@ -27,12 +27,17 @@ type Client struct {
 
 type Message struct {
 	MessageType int
-	ChatId 		uuid.UUID
+	ChatId      uuid.UUID
+	OwnerID     uuid.UUID
+	Value       string `json:"mess"`
+}
+type ReverseMessage struct {
 	Value       string `json:"mess"`
 }
 
 func (c *Client) sendMessage(messageType int, value string) error {
-	messageData, err := json.Marshal(value)
+	message := ReverseMessage{Value: value}
+	messageData, err := json.Marshal(message)
 	if err != nil {
 		return err
 	}
@@ -92,6 +97,7 @@ func (h *BaseHandler) HandleConnections(w http.ResponseWriter, r *http.Request) 
 			var receivedMessage Message
 			receivedMessage.MessageType = messageType
 			receivedMessage.ChatId = client.chatID
+			receivedMessage.OwnerID = client.UserId
 			err = json.Unmarshal(p, &receivedMessage)
 			if err != nil {
 				log.Println(err)
@@ -103,16 +109,22 @@ func (h *BaseHandler) HandleConnections(w http.ResponseWriter, r *http.Request) 
 	}()
 	go func() {
 		for {
-			response := <- client.messageChan
-				err = client.sendMessage(response.MessageType, response.Value)
+			response := <-client.messageChan
+			err = client.sendMessage(response.MessageType, response.Value)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			if client.UserId == response.OwnerID {
+				err = h.db.InsertMessage(response.ChatId, response.OwnerID, response.Value)
 				if err != nil {
-					log.Println(err)
 					return
 				}
+			}
 		}
-		
+
 	}()
-	defer func() {
-        h.removeClient(userID)
-    }()
+	// defer func() {
+	//     h.removeClient(userID)
+	// }()
 }

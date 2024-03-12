@@ -89,3 +89,16 @@ func (db DB) GetAllUsersInChat(chatID uuid.UUID) ([]uuid.UUID, error) {
     }
     return data, err
 }
+
+func (db DB) InsertMessage(chatID uuid.UUID, ownerID uuid.UUID, message string) error {
+	conn, err := db.pool.Acquire(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+	_, err = conn.Exec(context.Background(), "INSERT INTO messages (chatid, messagefromuser, ownerid) VALUES ($1, $2, $3)", chatID, message, ownerID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
