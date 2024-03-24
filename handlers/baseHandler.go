@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"Chat/db"
+	"fmt"
 	"os"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/google/uuid"
@@ -46,7 +47,7 @@ func parseToken(tokenString string) (*jwt.Token, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error parsing token: %v", err)
 	}
 
 	return token, nil

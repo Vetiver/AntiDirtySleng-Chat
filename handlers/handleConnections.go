@@ -46,14 +46,25 @@ func (c *Client) sendMessage(messageType int, value string) error {
 
 func (h *BaseHandler) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	authToken := r.Header.Get("Authorization")
-	fmt.Println("JWT Token:", authToken)
 	token, err := parseToken(authToken)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
-	userID, err := uuid.Parse(token.Claims.(jwt.MapClaims)["id"].(string))
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		log.Println("Invalid token claims")
+		http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+		return
+	}
+	userIDStr, ok := claims["id"].(string)
+	if !ok || userIDStr == "" {
+		log.Println("Missing user ID in token")
+		http.Error(w, "Missing user ID in token", http.StatusUnauthorized)
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
@@ -75,6 +86,7 @@ func (h *BaseHandler) HandleConnections(w http.ResponseWriter, r *http.Request) 
 	chatUsers, err := h.db.GetAllUsersInChat(chatID)
 	if err != nil {
 		log.Println(err)
+		conn.Close()
 		http.Error(w, "Failed to get chat users", http.StatusInternalServerError)
 		return
 	}
