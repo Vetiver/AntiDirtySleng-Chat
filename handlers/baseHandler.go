@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 )
 
-var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
 
 type BaseHandler struct {
 	db   *db.DB
@@ -37,15 +36,12 @@ func (с *BaseHandler)updateChans() {
 	}
 }
 
-func (h *BaseHandler) removeClient(userID uuid.UUID) {
-    delete(h.clients, userID)
-}
 
 func parseToken(tokenString string) (*jwt.Token, error) {
+	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return jwtSecret, nil
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("error parsing token: %v", err)
 	}
